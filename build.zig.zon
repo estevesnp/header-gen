@@ -1,0 +1,13 @@
+.{
+    .name = .header_gen,
+    .version = "0.0.1",
+    .dependencies = .{
+        .aro = .{
+            .url = "git+https://github.com/Vexu/arocc.git#ec1e1268459409def6f9a525c1edcf493b0314c3",
+            .hash = "aro-0.0.0-JSD1Qmu6OQDiOTNVBj6NLjvlyFHOKc6cZizXoUPiNIzF",
+        },
+    },
+    .minimum_zig_version = "0.17.0-dev.947+36069a2a7",
+    .paths = .{""},
+    .fingerprint = 0xe3ab1c60b4f4f196,
+}
