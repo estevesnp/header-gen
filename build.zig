@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
@@ -25,7 +26,10 @@ pub fn build(b: *std.Build) void {
         },
     });
 
-    const use_llvm = b.option(bool, "llvm", "compile with LLVM") orelse false;
+    // current nightly version loops forever on self-hosted backend for arm mac
+    // so we default to llvm backend in that case
+    const use_llvm = b.option(bool, "llvm", "compile with LLVM") orelse
+        (target.result.cpu.arch == .aarch64 and target.result.os.tag == .macos);
     const exe = b.addExecutable(.{
         .name = "header-gen",
         .root_module = mod,
