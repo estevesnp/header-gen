@@ -1,14 +1,25 @@
+#include <stdbool.h>
+#include <stdint.h>
+
 struct Foo {
-    const char *name;
-    int age;
+    bool is_foo;
+    uint8_t *name;
 };
 
 typedef struct Bar {
-    int bariarity;
+    struct Foo foo;
 } Bar;
 
-int calculate(int a, int b) {
-    int c = a + b;
-    int d = b * c;
-    return a / d;
-}
+enum Baz {
+    tree,
+    book
+};
+
+union FooBarBazNum {
+    struct Foo foo;
+    Bar *bar;
+    enum Baz baz;
+    int64_t num;
+};
+
+int8_t *const *calculate(struct Foo *foo, double mult);
