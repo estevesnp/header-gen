@@ -101,6 +101,7 @@ fn parseTree(arena: std.mem.Allocator, tree: *aro.Tree) !Schema {
         const node = node_idx.get(tree);
         const node_qt = node_idx.qtOrNull(tree) orelse continue;
 
+        // strip attributes (e.g. deprecated)
         const node_type = s: switch (node_qt.type(comp)) {
             .attributed => |a| continue :s a.base.type(comp),
             else => |e| e,
@@ -146,18 +147,11 @@ fn parseTree(arena: std.mem.Allocator, tree: *aro.Tree) !Schema {
 
                 if (struct_type.isAnonymous(comp)) continue;
 
-                var properties: std.ArrayList(Property) = .empty;
-                defer properties.deinit(arena);
-
-                for (struct_type.fields) |field| {
-                    const field_type = try resolveType(arena, comp, field.qt);
-                    const prop: Property = .init(field_type, field.qt.@"const", field.name.lookup(comp));
-                    try properties.append(arena, prop);
-                }
+                const record = try extractRecord(arena, comp, struct_type);
 
                 const st: Struct = .{
-                    .name = struct_type.name.lookup(comp),
-                    .properties = try properties.toOwnedSlice(arena),
+                    .name = record.name,
+                    .properties = record.properties,
                 };
 
                 try structs.append(arena, st);
@@ -206,19 +200,11 @@ fn parseTree(arena: std.mem.Allocator, tree: *aro.Tree) !Schema {
 
                 if (union_type.isAnonymous(comp)) continue;
 
-                var variants: std.ArrayList(Property) = .empty;
-                defer variants.deinit(arena);
-
-                // TODO - unify with struct
-                for (union_type.fields) |field| {
-                    const field_type = try resolveType(arena, comp, field.qt);
-                    const prop: Property = .init(field_type, field.qt.@"const", field.name.lookup(comp));
-                    try variants.append(arena, prop);
-                }
+                const record = try extractRecord(arena, comp, union_type);
 
                 const un: Union = .{
-                    .name = union_type.name.lookup(comp),
-                    .variants = try variants.toOwnedSlice(arena),
+                    .name = record.name,
+                    .variants = record.properties,
                 };
 
                 try unions.append(arena, un);
@@ -255,6 +241,27 @@ fn resolveType(arena: std.mem.Allocator, comp: *const aro.Compilation, qt: aro.Q
         },
     };
 }
+
+fn extractRecord(arena: std.mem.Allocator, comp: *const aro.Compilation, record: aro.Type.Record) !Record {
+    var properties: std.ArrayList(Property) = .empty;
+    defer properties.deinit(arena);
+
+    for (record.fields) |field| {
+        const field_type = try resolveType(arena, comp, field.qt);
+        const prop: Property = .init(field_type, field.qt.@"const", field.name.lookup(comp));
+        try properties.append(arena, prop);
+    }
+
+    return .{
+        .name = record.name.lookup(comp),
+        .properties = try properties.toOwnedSlice(arena),
+    };
+}
+
+const Record = struct {
+    name: []const u8,
+    properties: []const Property,
+};
 
 pub fn main(init: std.process.Init) !void {
     const gpa = init.gpa;
