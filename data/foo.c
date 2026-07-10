@@ -22,4 +22,10 @@ union FooBarBazNum {
     int64_t num;
 };
 
+enum Backed : uint8_t {
+    zero,
+    um,
+    dois
+};
+
 int8_t *const *calculate(struct Foo *foo, double mult);

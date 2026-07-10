@@ -23,6 +23,13 @@ const Type = union(Kind) {
     @"union": []const u8,
 
     pointer: *Property,
+
+    fn name(self: Type) []const u8 {
+        return switch (self) {
+            .pointer => "<ptr>",
+            inline else => |e| e,
+        };
+    }
 };
 
 const Schema = struct {
@@ -44,7 +51,7 @@ const Enum = struct {
 
     const Value = struct {
         name: []const u8,
-        value: u32,
+        value: i64,
     };
 };
 
@@ -60,8 +67,8 @@ const Function = struct {
 };
 
 const Property = struct {
-    name: ?[]const u8 = null,
-    @"const": bool = false,
+    name: ?[]const u8,
+    @"const": bool,
     kind: Kind,
     type: Type,
 
@@ -151,7 +158,36 @@ fn parseTree(arena: std.mem.Allocator, tree: *aro.Tree) !Schema {
                 try structs.append(arena, st);
             },
             .enum_decl => |enum_decl| {
-                std.debug.print("TODO: enum_decl={any}\n", .{enum_decl});
+                // maybe use node_qt.get(.@"enum") orelse continue
+                const enum_type = switch (node_qt.type(comp)) {
+                    .@"enum" => |e| e,
+                    else => |e| {
+                        std.debug.print("unexpected type for enum_decl: {t}\n", .{e});
+                        continue;
+                    },
+                };
+
+                if (enum_type.isAnonymous(comp) or enum_type.incomplete) continue;
+
+                const tag_type = try resolveType(arena, comp, enum_type.tag orelse continue);
+
+                var fields: std.ArrayList(Enum.Value) = .empty;
+                defer fields.deinit(arena);
+
+                for (enum_type.fields, enum_decl.fields) |type_field, decl_field| {
+                    try fields.append(arena, .{
+                        .name = type_field.name.lookup(comp),
+                        .value = tree.value_map.get(decl_field).?.toInt(i64, comp).?,
+                    });
+                }
+
+                const en: Enum = .{
+                    .name = enum_type.name.lookup(comp),
+                    .backing_type = tag_type.name(),
+                    .values = try fields.toOwnedSlice(arena),
+                };
+
+                try enums.append(arena, en);
             },
             .union_decl => |union_decl| {
                 std.debug.print("TODO: union_decl={any}\n", .{union_decl});
