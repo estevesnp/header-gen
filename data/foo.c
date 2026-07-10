@@ -21,6 +21,11 @@ union FooBarBazNum {
     enum Baz baz;
     int64_t num;
 };
+typedef union FooBarBazNum BazNum;
+
+typedef struct Fubar {
+    BazNum baz_num;
+} Fubar;
 
 enum Backed : uint8_t {
     zero,

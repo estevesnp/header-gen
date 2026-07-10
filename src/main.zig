@@ -106,6 +106,7 @@ fn parseTree(arena: std.mem.Allocator, tree: *aro.Tree) !Schema {
                 const func_type = switch (node_qt.type(comp)) {
                     .func => |f| f,
                     else => |e| {
+                        // TODO - deal with attributed
                         std.debug.print("unexpected type for function: {t}\n", .{e});
                         continue;
                     },
@@ -190,7 +191,33 @@ fn parseTree(arena: std.mem.Allocator, tree: *aro.Tree) !Schema {
                 try enums.append(arena, en);
             },
             .union_decl => |union_decl| {
-                std.debug.print("TODO: union_decl={any}\n", .{union_decl});
+                _ = union_decl;
+                const union_type = switch (node_qt.type(comp)) {
+                    .@"union" => |u| u,
+                    else => |e| {
+                        std.debug.print("unexpected type for union_decl: {t}\n", .{e});
+                        continue;
+                    },
+                };
+
+                if (union_type.isAnonymous(comp)) continue;
+
+                var variants: std.ArrayList(Property) = .empty;
+                defer variants.deinit(arena);
+
+                // TODO - unify with struct
+                for (union_type.fields) |field| {
+                    const field_type = try resolveType(arena, comp, field.qt);
+                    const prop: Property = .init(field_type, field.qt.@"const", field.name.lookup(comp));
+                    try variants.append(arena, prop);
+                }
+
+                const un: Union = .{
+                    .name = union_type.name.lookup(comp),
+                    .variants = try variants.toOwnedSlice(arena),
+                };
+
+                try unions.append(arena, un);
             },
             .typedef => {
                 // do we want to just silently ignore?
@@ -210,6 +237,8 @@ fn parseTree(arena: std.mem.Allocator, tree: *aro.Tree) !Schema {
 fn resolveType(arena: std.mem.Allocator, comp: *const aro.Compilation, qt: aro.QualType) !Type {
     return switch (qt.type(comp)) {
         .@"struct" => |s| .{ .@"struct" = s.name.lookup(comp) },
+        .@"enum" => |s| .{ .@"enum" = s.name.lookup(comp) },
+        .@"union" => |s| .{ .@"union" = s.name.lookup(comp) },
         .pointer => |p| {
             const prop = try arena.create(Property);
             prop.* = .init(try resolveType(arena, comp, p.child), qt.@"const", null);
