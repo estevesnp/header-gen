@@ -13,7 +13,7 @@ const Kind = enum {
     @"enum",
     @"union",
     pointer,
-    // TODO: arrays
+    array,
     // TODO: function? for function pointers (callbacks, etc)
 };
 
@@ -24,6 +24,7 @@ const Type = union(Kind) {
     @"union": []const u8,
 
     pointer: *Property,
+    array: *Array,
 };
 
 const Schema = struct {
@@ -58,6 +59,20 @@ const Function = struct {
     name: []const u8,
     parameters: []const Property,
     return_type: Type,
+};
+
+const Array = struct {
+    len: u64,
+    kind: Kind,
+    type: Type,
+
+    fn init(t: Type, len: u64) Array {
+        return .{
+            .len = len,
+            .kind = t,
+            .type = t,
+        };
+    }
 };
 
 const Property = struct {
@@ -228,6 +243,19 @@ fn resolveType(arena: std.mem.Allocator, comp: *const aro.Compilation, qt: aro.Q
             const prop = try arena.create(Property);
             prop.* = .init(try resolveType(arena, comp, p.child), p.child.@"const", null);
             return .{ .pointer = prop };
+        },
+        .array => |a| {
+            const len = switch (a.len) {
+                .fixed, .static => |l| l,
+                .incomplete, .variable, .unspecified_variable => blk: {
+                    std.debug.print("unsupported array type: {t}\n", .{a.len});
+                    break :blk 0;
+                },
+            };
+
+            const arr = try arena.create(Array);
+            arr.* = .init(try resolveType(arena, comp, a.elem), len);
+            return .{ .array = arr };
         },
         .typedef => resolveType(arena, comp, qt.base(comp).qt),
         .void, .bool => .{ .scalar = @tagName(t) },

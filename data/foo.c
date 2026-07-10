@@ -4,6 +4,8 @@
 struct Foo {
     bool is_foo;
     uint8_t *name;
+    int nums[16];
+    int (*add)(int, int);
 };
 
 typedef struct Bar {
@@ -36,4 +38,5 @@ enum Backed : uint8_t {
 int8_t *const *calculate(struct Foo *foo, double mult);
 
 __attribute__((deprecated("this was deprecated")))
-const char *deprecated_func(const char *str);
+const char *
+deprecated_func(const char *str);
