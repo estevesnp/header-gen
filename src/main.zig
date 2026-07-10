@@ -13,6 +13,7 @@ const Kind = enum {
     @"enum",
     @"union",
     pointer,
+    // TODO: arrays
     // TODO: function? for function pointers (callbacks, etc)
 };
 
@@ -23,13 +24,6 @@ const Type = union(Kind) {
     @"union": []const u8,
 
     pointer: *Property,
-
-    fn name(self: Type) []const u8 {
-        return switch (self) {
-            .pointer => "<ptr>",
-            inline else => |e| e,
-        };
-    }
 };
 
 const Schema = struct {
@@ -182,7 +176,7 @@ fn parseTree(arena: std.mem.Allocator, tree: *aro.Tree) !Schema {
 
                 const en: Enum = .{
                     .name = enum_type.name.lookup(comp),
-                    .backing_type = tag_type.name(),
+                    .backing_type = tag_type.scalar, // should always be an int
                     .values = try fields.toOwnedSlice(arena),
                 };
 
