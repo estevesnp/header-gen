@@ -56,8 +56,7 @@ const Union = struct {
 const Function = struct {
     name: []const u8,
     parameters: []const Property,
-    // must be Property instead of Type to annotate const-ness
-    return_type: Property,
+    return_type: Type,
 };
 
 const Property = struct {
@@ -97,11 +96,29 @@ fn parseTree(arena: std.mem.Allocator, tree: *aro.Tree) !Schema {
 
         switch (node) {
             .function => |function| {
-                // TODO - properly parse function
+                const func_type = switch (node_qt.type(comp)) {
+                    .func => |f| f,
+                    else => |e| {
+                        std.debug.print("unexpected type for function: {t}\n", .{e});
+                        continue;
+                    },
+                };
+
+                var params: std.ArrayList(Property) = .empty;
+                defer params.deinit(arena);
+
+                for (func_type.params) |param| {
+                    try params.append(arena, .init(
+                        try resolveType(arena, comp, param.qt),
+                        false,
+                        param.name.lookup(comp),
+                    ));
+                }
+
                 const func: Function = .{
                     .name = tree.tokSlice(function.name_tok),
-                    .parameters = &.{},
-                    .return_type = .{ .name = "void", .kind = .scalar, .type = .{ .scalar = "void" } },
+                    .parameters = try params.toOwnedSlice(arena),
+                    .return_type = try resolveType(arena, comp, func_type.return_type),
                 };
                 try functions.append(arena, func);
             },
