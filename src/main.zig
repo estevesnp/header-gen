@@ -56,6 +56,7 @@ const Union = struct {
 const Function = struct {
     name: []const u8,
     parameters: []const Property,
+    // must be Property instead of Type to annotate const-ness
     return_type: Property,
 };
 
@@ -64,6 +65,15 @@ const Property = struct {
     @"const": bool = false,
     kind: Kind,
     type: Type,
+
+    fn init(t: Type, is_const: bool, name: ?[]const u8) Property {
+        return .{
+            .name = name,
+            .@"const" = is_const,
+            .kind = t,
+            .type = t,
+        };
+    }
 };
 
 fn parseTree(arena: std.mem.Allocator, tree: *aro.Tree) !Schema {
@@ -105,16 +115,14 @@ fn parseTree(arena: std.mem.Allocator, tree: *aro.Tree) !Schema {
                     },
                 };
 
+                if (struct_type.isAnonymous(comp)) continue;
+
                 var properties: std.ArrayList(Property) = .empty;
                 defer properties.deinit(arena);
 
                 for (struct_type.fields) |field| {
-                    // TODO - properly parse fields
-                    const prop: Property = .{
-                        .name = field.name.lookup(comp),
-                        .kind = .scalar,
-                        .type = .{ .scalar = "void" },
-                    };
+                    const field_type = try resolveType(arena, comp, field.qt);
+                    const prop: Property = .init(field_type, field.qt.@"const", field.name.lookup(comp));
                     try properties.append(arena, prop);
                 }
 
@@ -131,10 +139,10 @@ fn parseTree(arena: std.mem.Allocator, tree: *aro.Tree) !Schema {
             .union_decl => |union_decl| {
                 std.debug.print("TODO: union_decl={any}\n", .{union_decl});
             },
-            else => {
-                std.debug.print("skipping node {t}\n", .{node});
-                continue;
+            .typedef => {
+                // do we want to just silently ignore?
             },
+            else => std.debug.print("skipping node {t}\n", .{node}),
         }
     }
 
@@ -143,6 +151,22 @@ fn parseTree(arena: std.mem.Allocator, tree: *aro.Tree) !Schema {
         .structs = try structs.toOwnedSlice(arena),
         .enums = try enums.toOwnedSlice(arena),
         .unions = try unions.toOwnedSlice(arena),
+    };
+}
+
+fn resolveType(arena: std.mem.Allocator, comp: *const aro.Compilation, qt: aro.QualType) !Type {
+    return switch (qt.type(comp)) {
+        .@"struct" => |s| .{ .@"struct" = s.name.lookup(comp) },
+        .pointer => |p| {
+            const prop = try arena.create(Property);
+            prop.* = .init(try resolveType(arena, comp, p.child), qt.@"const", null);
+            return .{ .pointer = prop };
+        },
+        .typedef => resolveType(arena, comp, qt.base(comp).qt),
+        else => |e| {
+            std.debug.print("defaulting to tagname: {t}\n", .{e});
+            return .{ .scalar = @tagName(e) };
+        },
     };
 }
 
