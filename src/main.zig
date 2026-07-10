@@ -123,7 +123,7 @@ fn parseTree(arena: std.mem.Allocator, tree: *aro.Tree) !Schema {
                 for (func_type.params) |param| {
                     try params.append(arena, .init(
                         try resolveType(arena, comp, param.qt),
-                        false,
+                        param.qt.@"const",
                         param.name.lookup(comp),
                     ));
                 }
@@ -225,20 +225,49 @@ fn parseTree(arena: std.mem.Allocator, tree: *aro.Tree) !Schema {
 }
 
 fn resolveType(arena: std.mem.Allocator, comp: *const aro.Compilation, qt: aro.QualType) !Type {
-    return switch (qt.type(comp)) {
+    const t = qt.type(comp);
+    return switch (t) {
         .@"struct" => |s| .{ .@"struct" = s.name.lookup(comp) },
         .@"enum" => |s| .{ .@"enum" = s.name.lookup(comp) },
         .@"union" => |s| .{ .@"union" = s.name.lookup(comp) },
         .pointer => |p| {
             const prop = try arena.create(Property);
-            prop.* = .init(try resolveType(arena, comp, p.child), qt.@"const", null);
+            prop.* = .init(try resolveType(arena, comp, p.child), p.child.@"const", null);
             return .{ .pointer = prop };
         },
         .typedef => resolveType(arena, comp, qt.base(comp).qt),
+        .void, .bool => .{ .scalar = @tagName(t) },
+
+        .int => |i| .{ .scalar = resolveIntName(comp, i) },
+        .float => |f| .{ .scalar = resolveFloatName(comp, f) },
+
         else => |e| {
             std.debug.print("defaulting to tagname: {t}\n", .{e});
             return .{ .scalar = @tagName(e) };
         },
+    };
+}
+
+fn resolveIntName(comp: *const aro.Compilation, int: aro.Type.Int) []const u8 {
+    if (int == .char) return "char";
+    const unsigned = @tagName(int)[0] == 'u';
+    return switch (int.bits(comp)) {
+        8 => if (unsigned) "u8" else "i8",
+        16 => if (unsigned) "u16" else "i16",
+        32 => if (unsigned) "u32" else "i32",
+        64 => if (unsigned) "u64" else "i64",
+        128 => if (unsigned) "u128" else "i128",
+        else => unreachable,
+    };
+}
+
+fn resolveFloatName(comp: *const aro.Compilation, float: aro.Type.Float) []const u8 {
+    return switch (float.bits(comp)) {
+        16 => "f16",
+        32 => "f32",
+        64 => "f64",
+        128 => "f128",
+        else => unreachable,
     };
 }
 
