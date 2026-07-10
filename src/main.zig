@@ -101,12 +101,16 @@ fn parseTree(arena: std.mem.Allocator, tree: *aro.Tree) !Schema {
         const node = node_idx.get(tree);
         const node_qt = node_idx.qtOrNull(tree) orelse continue;
 
+        const node_type = s: switch (node_qt.type(comp)) {
+            .attributed => |a| continue :s a.base.type(comp),
+            else => |e| e,
+        };
+
         switch (node) {
             .function => |function| {
-                const func_type = switch (node_qt.type(comp)) {
+                const func_type = switch (node_type) {
                     .func => |f| f,
                     else => |e| {
-                        // TODO - deal with attributed
                         std.debug.print("unexpected type for function: {t}\n", .{e});
                         continue;
                     },
@@ -132,7 +136,7 @@ fn parseTree(arena: std.mem.Allocator, tree: *aro.Tree) !Schema {
             },
             .struct_decl => |struct_decl| {
                 _ = struct_decl;
-                const struct_type = switch (node_qt.type(comp)) {
+                const struct_type = switch (node_type) {
                     .@"struct" => |s| s,
                     else => |e| {
                         std.debug.print("unexpected type for struct_decl: {t}\n", .{e});
@@ -160,7 +164,7 @@ fn parseTree(arena: std.mem.Allocator, tree: *aro.Tree) !Schema {
             },
             .enum_decl => |enum_decl| {
                 // maybe use node_qt.get(.@"enum") orelse continue
-                const enum_type = switch (node_qt.type(comp)) {
+                const enum_type = switch (node_type) {
                     .@"enum" => |e| e,
                     else => |e| {
                         std.debug.print("unexpected type for enum_decl: {t}\n", .{e});
@@ -192,7 +196,7 @@ fn parseTree(arena: std.mem.Allocator, tree: *aro.Tree) !Schema {
             },
             .union_decl => |union_decl| {
                 _ = union_decl;
-                const union_type = switch (node_qt.type(comp)) {
+                const union_type = switch (node_type) {
                     .@"union" => |u| u,
                     else => |e| {
                         std.debug.print("unexpected type for union_decl: {t}\n", .{e});

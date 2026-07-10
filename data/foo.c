@@ -34,3 +34,6 @@ enum Backed : uint8_t {
 };
 
 int8_t *const *calculate(struct Foo *foo, double mult);
+
+__attribute__((deprecated("this was deprecated")))
+void deprecated_func();
