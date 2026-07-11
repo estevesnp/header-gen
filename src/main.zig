@@ -2,6 +2,7 @@ const std = @import("std");
 const Io = std.Io;
 const assert = std.debug.assert;
 const fatal = std.process.fatal;
+const Allocator = std.mem.Allocator;
 
 const aro = @import("aro");
 
@@ -14,7 +15,7 @@ const Kind = enum {
     @"union",
     pointer,
     array,
-    // TODO: function? for function pointers (callbacks, etc)
+    function,
 };
 
 const Type = union(Kind) {
@@ -25,6 +26,8 @@ const Type = union(Kind) {
 
     pointer: *Property,
     array: *Array,
+
+    function: *Function,
 };
 
 const Schema = struct {
@@ -56,7 +59,7 @@ const Union = struct {
 };
 
 const Function = struct {
-    name: []const u8,
+    name: ?[]const u8,
     parameters: []const Property,
     return_type: Type,
 };
@@ -91,7 +94,7 @@ const Property = struct {
     }
 };
 
-fn parseTree(arena: std.mem.Allocator, tree: *aro.Tree) !Schema {
+fn parseTree(arena: Allocator, tree: *aro.Tree) Allocator.Error!Schema {
     const comp = tree.comp;
 
     var functions: std.ArrayList(Function) = .empty;
@@ -126,20 +129,9 @@ fn parseTree(arena: std.mem.Allocator, tree: *aro.Tree) !Schema {
                     },
                 };
 
-                var params: std.ArrayList(Property) = .empty;
-                defer params.deinit(arena);
-
-                for (func_type.params) |param| {
-                    try params.append(arena, .init(
-                        try resolveType(arena, comp, param.qt),
-                        param.qt.@"const",
-                        param.name.lookup(comp),
-                    ));
-                }
-
                 const func: Function = .{
                     .name = tree.tokSlice(function.name_tok),
-                    .parameters = try params.toOwnedSlice(arena),
+                    .parameters = try extractFuncParams(arena, comp, func_type),
                     .return_type = try resolveType(arena, comp, func_type.return_type),
                 };
                 try functions.append(arena, func);
@@ -233,7 +225,7 @@ fn parseTree(arena: std.mem.Allocator, tree: *aro.Tree) !Schema {
     };
 }
 
-fn resolveType(arena: std.mem.Allocator, comp: *const aro.Compilation, qt: aro.QualType) !Type {
+fn resolveType(arena: Allocator, comp: *const aro.Compilation, qt: aro.QualType) Allocator.Error!Type {
     const t = qt.type(comp);
     return switch (t) {
         .@"struct" => |s| .{ .@"struct" = s.name.lookup(comp) },
@@ -262,6 +254,16 @@ fn resolveType(arena: std.mem.Allocator, comp: *const aro.Compilation, qt: aro.Q
 
         .int => |i| .{ .scalar = resolveIntName(comp, i) },
         .float => |f| .{ .scalar = resolveFloatName(comp, f) },
+
+        .func => |f| {
+            const func = try arena.create(Function);
+            func.* = .{
+                .name = null,
+                .parameters = try extractFuncParams(arena, comp, f),
+                .return_type = try resolveType(arena, comp, f.return_type),
+            };
+            return .{ .function = func };
+        },
 
         else => |e| {
             std.debug.print("defaulting to tagname: {t}\n", .{e});
@@ -293,7 +295,7 @@ fn resolveFloatName(comp: *const aro.Compilation, float: aro.Type.Float) []const
     };
 }
 
-fn extractRecord(arena: std.mem.Allocator, comp: *const aro.Compilation, record: aro.Type.Record) !Record {
+fn extractRecord(arena: Allocator, comp: *const aro.Compilation, record: aro.Type.Record) Allocator.Error!Record {
     var properties: std.ArrayList(Property) = .empty;
     defer properties.deinit(arena);
 
@@ -307,6 +309,22 @@ fn extractRecord(arena: std.mem.Allocator, comp: *const aro.Compilation, record:
         .name = record.name.lookup(comp),
         .properties = try properties.toOwnedSlice(arena),
     };
+}
+
+fn extractFuncParams(arena: Allocator, comp: *const aro.Compilation, func: aro.Type.Func) Allocator.Error![]const Property {
+    var params: std.ArrayList(Property) = .empty;
+    defer params.deinit(arena);
+
+    for (func.params) |param| {
+        const param_name = param.name.lookup(comp);
+        try params.append(arena, .init(
+            try resolveType(arena, comp, param.qt),
+            param.qt.@"const",
+            if (param_name.len != 0) param_name else null,
+        ));
+    }
+
+    return params.toOwnedSlice(arena);
 }
 
 const Record = struct {
