@@ -349,6 +349,8 @@ pub fn main(init: std.process.Init) !void {
         } },
     };
 
+    const exe_name = try std.process.executablePathAlloc(io, arena);
+
     var comp = try aro.Compilation.init(.{
         .gpa = gpa,
         .arena = arena,
@@ -360,7 +362,7 @@ pub fn main(init: std.process.Init) !void {
 
     var driver: aro.Driver = .{
         .comp = &comp,
-        .aro_name = args[0],
+        .aro_name = exe_name,
         .diagnostics = &diagnostics,
     };
     defer driver.deinit();
@@ -373,7 +375,7 @@ pub fn main(init: std.process.Init) !void {
 
     var discard_buf: [256]u8 = undefined;
     var discarding: Io.Writer.Discarding = .init(&discard_buf);
-    assert(!try driver.parseArgs(&discarding.writer, &macro_buf, &.{ args[0], input_file_path }));
+    assert(!try driver.parseArgs(&discarding.writer, &macro_buf, &.{ exe_name, input_file_path }));
     if (macro_buf.items.len > std.math.maxInt(u32)) {
         return driver.fatal("user provided macro source exceeded max size", .{});
     }
