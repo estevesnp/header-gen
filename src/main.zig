@@ -405,11 +405,10 @@ pub fn main(init: std.process.Init) !void {
     var stdout_buf: [1024]u8 = undefined;
     var stdout = Io.File.stdout().writer(io, &stdout_buf);
 
-    try stdout.interface.print("{f}\n", .{
-        std.json.fmt(decls, .{
-            .whitespace = .indent_2,
-            .emit_null_optional_fields = false,
-        }),
-    });
+    try std.json.Stringify.value(
+        decls,
+        .{ .whitespace = .indent_2, .emit_null_optional_fields = false },
+        &stdout.interface,
+    );
     try stdout.interface.flush();
 }
