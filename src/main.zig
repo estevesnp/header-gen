@@ -6,8 +6,6 @@ const Allocator = std.mem.Allocator;
 
 const aro = @import("aro");
 
-const fff_h = "data/fff.h";
-
 const Kind = enum {
     scalar,
     @"struct",
@@ -112,7 +110,7 @@ fn parseTree(arena: Allocator, tree: *aro.Tree) Allocator.Error!Schema {
     for (tree.root_decls.items) |node_idx| {
         const node = node_idx.get(tree);
         const node_qt = node_idx.qtOrNull(tree) orelse continue;
-        const node_type =  node_qt.type(comp);
+        const node_type = node_qt.type(comp);
 
         switch (node) {
             .function => |function| {
@@ -333,7 +331,9 @@ pub fn main(init: std.process.Init) !void {
     const io = init.io;
     const args = try init.minimal.args.toSlice(arena);
 
-    const input_file_path = if (args.len > 1) args[1] else fff_h;
+    if (args.len < 2) fatal("usage: {s} <file>", .{args[0]});
+
+    const input_file_path = args[1];
 
     var stderr_buf: [1024]u8 = undefined;
     var stderr = std.Io.File.stderr().writer(io, &stderr_buf);
