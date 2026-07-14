@@ -112,12 +112,7 @@ fn parseTree(arena: Allocator, tree: *aro.Tree) Allocator.Error!Schema {
     for (tree.root_decls.items) |node_idx| {
         const node = node_idx.get(tree);
         const node_qt = node_idx.qtOrNull(tree) orelse continue;
-
-        // strip attributes (e.g. deprecated)
-        const node_type = s: switch (node_qt.type(comp)) {
-            .attributed => |a| continue :s a.base.type(comp),
-            else => |e| e,
-        };
+        const node_type =  node_qt.type(comp);
 
         switch (node) {
             .function => |function| {
