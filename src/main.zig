@@ -28,7 +28,7 @@ const Type = union(Kind) {
     function: *Function,
 };
 
-const Schema = struct {
+const Declarations = struct {
     structs: []const Struct,
     enums: []const Enum,
     unions: []const Union,
@@ -92,7 +92,7 @@ const Property = struct {
     }
 };
 
-fn parseTree(arena: Allocator, tree: *aro.Tree) Allocator.Error!Schema {
+fn parseTree(arena: Allocator, tree: *aro.Tree) Allocator.Error!Declarations {
     const comp = tree.comp;
 
     var functions: std.ArrayList(Function) = .empty;
