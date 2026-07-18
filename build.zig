@@ -17,12 +17,33 @@ pub fn build(b: *std.Build) void {
         .install_subdir = "include",
     });
 
-    const mod = b.createModule(.{
-        .root_source_file = b.path("src/main.zig"),
+    const header_gen_mod = b.addModule("header_gen", .{
+        .root_source_file = b.path("src/header_gen.zig"),
         .target = target,
         .optimize = optimize,
         .imports = &.{
             .{ .name = "aro", .module = aro.module("aro") },
+        },
+    });
+
+    // tests
+    const filters = b.option([]const []const u8, "testfilter", "test filters to run") orelse &.{};
+    const test_exe = b.addTest(.{
+        .root_module = header_gen_mod,
+        .filters = filters,
+    });
+    const run_tests_cmd = b.addRunArtifact(test_exe);
+
+    const test_step = b.step("test", "test app");
+    test_step.dependOn(&run_tests_cmd.step);
+
+    // exe
+    const exe_mod = b.createModule(.{
+        .root_source_file = b.path("src/main.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "header_gen", .module = header_gen_mod },
         },
     });
 
@@ -32,7 +53,7 @@ pub fn build(b: *std.Build) void {
         (target.result.cpu.arch == .aarch64 and target.result.os.tag == .macos);
     const exe = b.addExecutable(.{
         .name = "header-gen",
-        .root_module = mod,
+        .root_module = exe_mod,
         .use_llvm = use_llvm,
     });
 
@@ -45,21 +66,10 @@ pub fn build(b: *std.Build) void {
     const run_step = b.step("run", "run executable");
     run_step.dependOn(&run_cmd.step);
 
-    // tests
-    const filters = b.option([]const []const u8, "testfilter", "test filters to run") orelse &.{};
-    const test_exe = b.addTest(.{
-        .root_module = mod,
-        .filters = filters,
-    });
-    const run_tests_cmd = b.addRunArtifact(test_exe);
-
-    const test_step = b.step("test", "test app");
-    test_step.dependOn(&run_tests_cmd.step);
-
     // check
     const check_exe = b.addExecutable(.{
         .name = "check",
-        .root_module = mod,
+        .root_module = exe_mod,
         .use_llvm = use_llvm,
     });
 
