@@ -13,7 +13,7 @@ pub fn build(b: *std.Build) void {
     // for default system includes
     b.installDirectory(.{
         .source_dir = aro.path("include"),
-        .install_dir = .prefix,
+        .install_dir = .bin,
         .install_subdir = "include",
     });
 
