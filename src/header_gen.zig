@@ -222,7 +222,7 @@ pub fn generateDeclarations(
     arena: Allocator,
     io: Io,
     environ_map: *const std.process.Environ.Map,
-    stderr: *Io.Writer,
+    diagnostics: Io.Terminal,
     filename: []const u8,
 ) !Declarations {
     var aro_arena_state: std.heap.ArenaAllocator = .init(gpa);
@@ -231,18 +231,13 @@ pub fn generateDeclarations(
 
     const exe_name = try std.process.executablePathAlloc(io, aro_arena);
 
-    var diagnostics: aro.Diagnostics = .{
-        .output = .{ .to_writer = .{
-            .mode = .escape_codes,
-            .writer = stderr,
-        } },
-    };
+    var diag: aro.Diagnostics = .{ .output = .{ .to_writer = diagnostics }, };
 
     var comp = try aro.Compilation.init(.{
         .gpa = gpa,
         .arena = aro_arena,
         .io = io,
-        .diagnostics = &diagnostics,
+        .diagnostics = &diag,
         .environ_map = environ_map,
     });
     defer comp.deinit();
@@ -250,7 +245,7 @@ pub fn generateDeclarations(
     var driver: aro.Driver = .{
         .comp = &comp,
         .aro_name = exe_name,
-        .diagnostics = &diagnostics,
+        .diagnostics = &diag,
     };
     defer driver.deinit();
 
