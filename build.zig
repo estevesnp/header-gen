@@ -1,6 +1,21 @@
 const std = @import("std");
 const builtin = @import("builtin");
 
+/// install aro builtin headers
+pub fn installBuiltinHeaders(b: *std.Build) void {
+    const dep = b.dependencyFromBuildZig(@This(), .{});
+    const aro = dep.builder.dependency("aro", .{});
+    installAroHeaders(b, aro);
+}
+
+fn installAroHeaders(b: *std.Build, aro_dep: *std.Build.Dependency) void {
+    b.installDirectory(.{
+        .source_dir = aro_dep.path("include"),
+        .install_dir = .bin,
+        .install_subdir = "include",
+    });
+}
+
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
@@ -11,11 +26,7 @@ pub fn build(b: *std.Build) void {
     });
 
     // for default system includes
-    b.installDirectory(.{
-        .source_dir = aro.path("include"),
-        .install_dir = .bin,
-        .install_subdir = "include",
-    });
+    installAroHeaders(b, aro);
 
     const header_gen_mod = b.addModule("header_gen", .{
         .root_source_file = b.path("src/header_gen.zig"),
