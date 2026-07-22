@@ -262,7 +262,7 @@ pub fn generateDeclarations(
         return driver.fatal("user provided macro source exceeded max size", .{});
     }
 
-    const content = try macro_buf.toOwnedSlice(aro_arena);
+    const content = try macro_buf.toOwnedSliceSentinel(gpa, 0);
     const user_macros = try driver.comp.addSourceFromOwnedBuffer("<command line>", content, .user);
 
     const source = driver.inputs.items[0];
