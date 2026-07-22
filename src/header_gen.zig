@@ -231,7 +231,7 @@ pub fn generateDeclarations(
 
     const exe_name = try std.process.executablePathAlloc(io, aro_arena);
 
-    var diag: aro.Diagnostics = .{ .output = .{ .to_writer = diagnostics }, };
+    var diag: aro.Diagnostics = .{ .output = .{ .to_writer = diagnostics } };
 
     var comp = try aro.Compilation.init(.{
         .gpa = gpa,
@@ -262,9 +262,15 @@ pub fn generateDeclarations(
         return driver.fatal("user provided macro source exceeded max size", .{});
     }
 
-    const content = try macro_buf.toOwnedSliceSentinel(gpa, 0);
-    const user_macros = try driver.comp.addSourceFromOwnedBuffer("<command line>", content, .user);
+    const user_macros = macros: {
+        const content = try macro_buf.toOwnedSliceSentinel(gpa, 0);
+        errdefer gpa.free(content);
+        break :macros try driver.comp.addSourceFromOwnedBuffer("<command line>", content, .user);
+    };
 
+    if (driver.inputs.items.len == 0) {
+        return driver.fatal("no input files", .{});
+    }
     const source = driver.inputs.items[0];
 
     try toolchain.discover();
@@ -286,6 +292,10 @@ pub fn generateDeclarations(
 
     var tree = try pp.parse();
     defer tree.deinit();
+
+    if (diag.errors != 0) {
+        return error.ParseFailed;
+    }
 
     return parseTree(arena, &tree);
 }
