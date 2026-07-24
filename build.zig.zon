@@ -3,11 +3,11 @@
     .version = "0.0.1",
     .dependencies = .{
         .aro = .{
-            .url = "git+https://github.com/Vexu/arocc.git#a42a1bb0a76edd4adb55c64dbb75f0e595bfe277",
-            .hash = "aro-0.0.0-JSD1QqxmOgB-FhHEi2u_zvSsC0R_pRR1S_nRP-xzMi-B",
+            .url = "git+https://github.com/Vexu/arocc.git#2d1b742588cc7f3b28b3b1376267c14826d91a32",
+            .hash = "aro-0.0.0-JSD1QoXINgDHR5zwZF9brvI0kmpe5kI1uhYvxDSm2cWa",
         },
     },
-    .minimum_zig_version = "0.17.0-dev.1441+d5181a9c9",
+    .minimum_zig_version = "0.17.0-dev.1454+5faa79730",
     .paths = .{""},
     .fingerprint = 0xe3ab1c60b4f4f196,
 }

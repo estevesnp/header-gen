@@ -16,7 +16,7 @@ header-gen <file>
 - build the project
   - `zig build -Doptimize=ReleaseSafe`
 - symlink the executable to somewhere in your path
-  - `ln -s $(pwd)/zig-out/bin/header-gen /dir/in/path`
+  - `ln -sf $(pwd)/zig-out/bin/header-gen /dir/in/path`
 
 ## dependency
 
