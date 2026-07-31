@@ -257,6 +257,8 @@ pub fn generateDeclarations(
 
     var discard_buf: [256]u8 = undefined;
     var discarding: Io.Writer.Discarding = .init(&discard_buf);
+
+    // TODO - if parseArgs returns true, error out
     assert(!try driver.parseArgs(&discarding.writer, &macro_buf, &.{ exe_name, filename }));
     if (macro_buf.items.len > std.math.maxInt(u32)) {
         return driver.fatal("user provided macro source exceeded max size", .{});
