@@ -7,25 +7,25 @@ const Allocator = std.mem.Allocator;
 const aro = @import("aro");
 
 pub const Kind = enum {
-    scalar,
-    @"struct",
-    @"enum",
-    @"union",
-    pointer,
-    array,
-    function,
+    k_scalar,
+    k_struct,
+    k_enum,
+    k_union,
+    k_pointer,
+    k_array,
+    k_function,
 };
 
 pub const Type = union(Kind) {
-    scalar: []const u8,
-    @"struct": []const u8,
-    @"enum": []const u8,
-    @"union": []const u8,
+    k_scalar: []const u8,
+    k_struct: []const u8,
+    k_enum: []const u8,
+    k_union: []const u8,
 
-    pointer: *Property,
-    array: *Array,
+    k_pointer: *Property,
+    k_array: *Array,
 
-    function: *Function,
+    k_function: *Function,
 };
 
 pub const Declarations = struct {
@@ -79,14 +79,14 @@ pub const Array = struct {
 
 pub const Property = struct {
     name: ?[]const u8,
-    @"const": bool,
+    is_const: bool,
     kind: Kind,
     type: Type,
 
     fn init(t: Type, is_const: bool, name: ?[]const u8) Property {
         return .{
             .name = name,
-            .@"const" = is_const,
+            .is_const = is_const,
             .kind = t,
             .type = t,
         };
@@ -94,9 +94,9 @@ pub const Property = struct {
 };
 
 pub const OpaqueKind = enum {
-    @"struct",
-    @"enum",
-    @"union",
+    k_struct,
+    k_enum,
+    k_union,
 };
 
 pub const Opaque = struct { name: []const u8, kind: OpaqueKind };
@@ -187,7 +187,7 @@ pub fn parseTree(arena: Allocator, tree: *aro.Tree) Allocator.Error!Declarations
 
                 const en: Enum = .{
                     .name = try arena.dupe(u8, enum_type.name.lookup(comp)),
-                    .backing_type = tag_type.scalar, // should always be an int
+                    .backing_type = tag_type.k_scalar, // should always be an int
                     .values = try fields.toOwnedSlice(arena),
                 };
 
@@ -217,21 +217,21 @@ pub fn parseTree(arena: Allocator, tree: *aro.Tree) Allocator.Error!Declarations
             .struct_forward_decl => |decl| {
                 const name = tree.tokSlice(decl.name_or_kind_tok);
                 try forward_decls.append(arena, .{
-                    .kind = .@"struct",
+                    .kind = .k_struct,
                     .name = name,
                 });
             },
             .enum_forward_decl => |decl| {
                 const name = tree.tokSlice(decl.name_or_kind_tok);
                 try forward_decls.append(arena, .{
-                    .kind = .@"enum",
+                    .kind = .k_enum,
                     .name = name,
                 });
             },
             .union_forward_decl => |decl| {
                 const name = tree.tokSlice(decl.name_or_kind_tok);
                 try forward_decls.append(arena, .{
-                    .kind = .@"union",
+                    .kind = .k_union,
                     .name = name,
                 });
             },
@@ -247,9 +247,9 @@ pub fn parseTree(arena: Allocator, tree: *aro.Tree) Allocator.Error!Declarations
 
     loop: for (forward_decls.items) |decl| {
         switch (decl.kind) {
-            .@"struct" => for (structs.items) |st| if (std.mem.eql(u8, decl.name, st.name)) continue :loop,
-            .@"enum" => for (enums.items) |en| if (std.mem.eql(u8, decl.name, en.name)) continue :loop,
-            .@"union" => for (unions.items) |un| if (std.mem.eql(u8, decl.name, un.name)) continue :loop,
+            .k_struct => for (structs.items) |st| if (std.mem.eql(u8, decl.name, st.name)) continue :loop,
+            .k_enum => for (enums.items) |en| if (std.mem.eql(u8, decl.name, en.name)) continue :loop,
+            .k_union => for (unions.items) |un| if (std.mem.eql(u8, decl.name, un.name)) continue :loop,
         }
 
         try opaques.append(arena, .{
@@ -355,13 +355,13 @@ pub fn generateDeclarations(
 fn resolveType(arena: Allocator, comp: *const aro.Compilation, qt: aro.QualType) Allocator.Error!Type {
     const t = qt.type(comp);
     return switch (t) {
-        .@"struct" => |s| .{ .@"struct" = try arena.dupe(u8, s.name.lookup(comp)) },
-        .@"enum" => |s| .{ .@"enum" = try arena.dupe(u8, s.name.lookup(comp)) },
-        .@"union" => |s| .{ .@"union" = try arena.dupe(u8, s.name.lookup(comp)) },
+        .@"struct" => |s| .{ .k_struct = try arena.dupe(u8, s.name.lookup(comp)) },
+        .@"enum" => |s| .{ .k_enum = try arena.dupe(u8, s.name.lookup(comp)) },
+        .@"union" => |s| .{ .k_union = try arena.dupe(u8, s.name.lookup(comp)) },
         .pointer => |p| {
             const prop = try arena.create(Property);
             prop.* = .init(try resolveType(arena, comp, p.child), p.child.@"const", null);
-            return .{ .pointer = prop };
+            return .{ .k_pointer = prop };
         },
         .array => |a| {
             const len = switch (a.len) {
@@ -374,13 +374,13 @@ fn resolveType(arena: Allocator, comp: *const aro.Compilation, qt: aro.QualType)
 
             const arr = try arena.create(Array);
             arr.* = .init(try resolveType(arena, comp, a.elem), len);
-            return .{ .array = arr };
+            return .{ .k_array = arr };
         },
         .typedef => resolveType(arena, comp, qt.base(comp).qt),
-        .void, .bool => .{ .scalar = @tagName(t) },
+        .void, .bool => .{ .k_scalar = @tagName(t) },
 
-        .int => |i| .{ .scalar = resolveIntName(comp, i) },
-        .float => |f| .{ .scalar = resolveFloatName(comp, f) },
+        .int => |i| .{ .k_scalar = resolveIntName(comp, i) },
+        .float => |f| .{ .k_scalar = resolveFloatName(comp, f) },
 
         .func => |f| {
             const func = try arena.create(Function);
@@ -389,12 +389,12 @@ fn resolveType(arena: Allocator, comp: *const aro.Compilation, qt: aro.QualType)
                 .parameters = try extractFuncParams(arena, comp, f),
                 .return_type = try resolveType(arena, comp, f.return_type),
             };
-            return .{ .function = func };
+            return .{ .k_function = func };
         },
 
         else => |e| {
             std.debug.print("defaulting to tagname: {t}\n", .{e});
-            return .{ .scalar = @tagName(e) };
+            return .{ .k_scalar = @tagName(e) };
         },
     };
 }
