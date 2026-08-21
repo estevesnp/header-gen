@@ -6,6 +6,14 @@ const Allocator = std.mem.Allocator;
 
 const aro = @import("aro");
 
+pub const Declarations = struct {
+    structs: []const Struct,
+    enums: []const Enum,
+    unions: []const Union,
+    functions: []const Function,
+    opaques: []const Opaque,
+};
+
 pub const Kind = enum {
     k_scalar,
     k_struct,
@@ -17,10 +25,10 @@ pub const Kind = enum {
 };
 
 pub const Type = union(Kind) {
-    k_scalar: []const u8,
-    k_struct: []const u8,
-    k_enum: []const u8,
-    k_union: []const u8,
+    k_scalar: Scalar,
+    k_struct: Identifier,
+    k_enum: Identifier,
+    k_union: Identifier,
 
     k_pointer: *Property,
     k_array: *Array,
@@ -28,12 +36,37 @@ pub const Type = union(Kind) {
     k_function: *Function,
 };
 
-pub const Declarations = struct {
-    structs: []const Struct,
-    enums: []const Enum,
-    unions: []const Union,
-    functions: []const Function,
-    opaques: []const Opaque,
+pub const ScalarKind = enum {
+    s_void,
+    s_bool,
+
+    s_char,
+
+    s_u8,
+    s_u16,
+    s_u32,
+    s_u64,
+    s_u128,
+
+    s_i8,
+    s_i16,
+    s_i32,
+    s_i64,
+    s_i128,
+
+    s_f16,
+    s_f32,
+    s_f64,
+    s_f128,
+};
+
+pub const Scalar = struct {
+    scalar: ScalarKind,
+};
+
+pub const Identifier = struct {
+    name: []const u8,
+    kind: Kind,
 };
 
 pub const Struct = struct {
@@ -43,7 +76,7 @@ pub const Struct = struct {
 
 pub const Enum = struct {
     name: []const u8,
-    backing_type: []const u8,
+    backing_type: ScalarKind,
     values: []const Value,
 
     const Value = struct {
@@ -99,7 +132,10 @@ pub const OpaqueKind = enum {
     k_union,
 };
 
-pub const Opaque = struct { name: []const u8, kind: OpaqueKind };
+pub const Opaque = struct {
+    name: []const u8,
+    kind: OpaqueKind,
+};
 
 pub fn parseTree(arena: Allocator, tree: *aro.Tree) Allocator.Error!Declarations {
     const comp = tree.comp;
@@ -187,7 +223,7 @@ pub fn parseTree(arena: Allocator, tree: *aro.Tree) Allocator.Error!Declarations
 
                 const en: Enum = .{
                     .name = try arena.dupe(u8, enum_type.name.lookup(comp)),
-                    .backing_type = tag_type.k_scalar, // should always be an int
+                    .backing_type = tag_type.k_scalar.scalar, // should always be an int
                     .values = try fields.toOwnedSlice(arena),
                 };
 
@@ -355,9 +391,9 @@ pub fn generateDeclarations(
 fn resolveType(arena: Allocator, comp: *const aro.Compilation, qt: aro.QualType) Allocator.Error!Type {
     const t = qt.type(comp);
     return switch (t) {
-        .@"struct" => |s| .{ .k_struct = try arena.dupe(u8, s.name.lookup(comp)) },
-        .@"enum" => |s| .{ .k_enum = try arena.dupe(u8, s.name.lookup(comp)) },
-        .@"union" => |s| .{ .k_union = try arena.dupe(u8, s.name.lookup(comp)) },
+        .@"struct" => |s| .{ .k_struct = .{ .kind = .k_struct, .name = try arena.dupe(u8, s.name.lookup(comp)) } },
+        .@"enum" => |s| .{ .k_enum = .{ .kind = .k_enum, .name = try arena.dupe(u8, s.name.lookup(comp)) } },
+        .@"union" => |s| .{ .k_union = .{ .kind = .k_union, .name = try arena.dupe(u8, s.name.lookup(comp)) } },
         .pointer => |p| {
             const prop = try arena.create(Property);
             prop.* = .init(try resolveType(arena, comp, p.child), p.child.@"const", null);
@@ -377,10 +413,11 @@ fn resolveType(arena: Allocator, comp: *const aro.Compilation, qt: aro.QualType)
             return .{ .k_array = arr };
         },
         .typedef => resolveType(arena, comp, qt.base(comp).qt),
-        .void, .bool => .{ .k_scalar = @tagName(t) },
+        .void => .{ .k_scalar = .{ .scalar = .s_void } },
+        .bool => .{ .k_scalar = .{ .scalar = .s_bool } },
 
-        .int => |i| .{ .k_scalar = resolveIntName(comp, i) },
-        .float => |f| .{ .k_scalar = resolveFloatName(comp, f) },
+        .int => |i| .{ .k_scalar = .{ .scalar = resolveIntName(comp, i) } },
+        .float => |f| .{ .k_scalar = .{ .scalar = resolveFloatName(comp, f) } },
 
         .func => |f| {
             const func = try arena.create(Function);
@@ -392,32 +429,29 @@ fn resolveType(arena: Allocator, comp: *const aro.Compilation, qt: aro.QualType)
             return .{ .k_function = func };
         },
 
-        else => |e| {
-            std.debug.print("defaulting to tagname: {t}\n", .{e});
-            return .{ .k_scalar = @tagName(e) };
-        },
+        else => |e| std.debug.panic("unhandled tag: {t}", .{e}),
     };
 }
 
-fn resolveIntName(comp: *const aro.Compilation, int: aro.Type.Int) []const u8 {
-    if (int == .char) return "char";
+fn resolveIntName(comp: *const aro.Compilation, int: aro.Type.Int) ScalarKind {
+    if (int == .char) return .s_char;
     const unsigned = @tagName(int)[0] == 'u';
     return switch (int.bits(comp)) {
-        8 => if (unsigned) "u8" else "i8",
-        16 => if (unsigned) "u16" else "i16",
-        32 => if (unsigned) "u32" else "i32",
-        64 => if (unsigned) "u64" else "i64",
-        128 => if (unsigned) "u128" else "i128",
+        8 => if (unsigned) .s_u8 else .s_i8,
+        16 => if (unsigned) .s_u16 else .s_i16,
+        32 => if (unsigned) .s_u32 else .s_i32,
+        64 => if (unsigned) .s_u64 else .s_i64,
+        128 => if (unsigned) .s_u128 else .s_i128,
         else => unreachable,
     };
 }
 
-fn resolveFloatName(comp: *const aro.Compilation, float: aro.Type.Float) []const u8 {
+fn resolveFloatName(comp: *const aro.Compilation, float: aro.Type.Float) ScalarKind {
     return switch (float.bits(comp)) {
-        16 => "f16",
-        32 => "f32",
-        64 => "f64",
-        128 => "f128",
+        16 => .s_f16,
+        32 => .s_f32,
+        64 => .s_f64,
+        128 => .s_f128,
         else => unreachable,
     };
 }
