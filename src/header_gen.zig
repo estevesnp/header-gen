@@ -33,6 +33,7 @@ pub const Declarations = struct {
     enums: []const Enum,
     unions: []const Union,
     functions: []const Function,
+    opaques: []const Opaque,
 };
 
 pub const Struct = struct {
@@ -92,6 +93,14 @@ pub const Property = struct {
     }
 };
 
+pub const OpaqueKind = enum {
+    @"struct",
+    @"enum",
+    @"union",
+};
+
+pub const Opaque = struct { name: []const u8, kind: OpaqueKind };
+
 pub fn parseTree(arena: Allocator, tree: *aro.Tree) Allocator.Error!Declarations {
     const comp = tree.comp;
 
@@ -106,6 +115,9 @@ pub fn parseTree(arena: Allocator, tree: *aro.Tree) Allocator.Error!Declarations
 
     var unions: std.ArrayList(Union) = .empty;
     defer unions.deinit(arena);
+
+    var forward_decls: std.ArrayList(Opaque) = .empty;
+    defer forward_decls.deinit(arena);
 
     for (tree.root_decls.items) |node_idx| {
         const node = node_idx.get(tree);
@@ -202,6 +214,27 @@ pub fn parseTree(arena: Allocator, tree: *aro.Tree) Allocator.Error!Declarations
 
                 try unions.append(arena, un);
             },
+            .struct_forward_decl => |decl| {
+                const name = tree.tokSlice(decl.name_or_kind_tok);
+                try forward_decls.append(arena, .{
+                    .kind = .@"struct",
+                    .name = name,
+                });
+            },
+            .enum_forward_decl => |decl| {
+                const name = tree.tokSlice(decl.name_or_kind_tok);
+                try forward_decls.append(arena, .{
+                    .kind = .@"enum",
+                    .name = name,
+                });
+            },
+            .union_forward_decl => |decl| {
+                const name = tree.tokSlice(decl.name_or_kind_tok);
+                try forward_decls.append(arena, .{
+                    .kind = .@"union",
+                    .name = name,
+                });
+            },
             .typedef => {
                 // do we want to just silently ignore?
             },
@@ -209,11 +242,28 @@ pub fn parseTree(arena: Allocator, tree: *aro.Tree) Allocator.Error!Declarations
         }
     }
 
+    var opaques: std.ArrayList(Opaque) = .empty;
+    defer opaques.deinit(arena);
+
+    loop: for (forward_decls.items) |decl| {
+        switch (decl.kind) {
+            .@"struct" => for (structs.items) |st| if (std.mem.eql(u8, decl.name, st.name)) continue :loop,
+            .@"enum" => for (enums.items) |en| if (std.mem.eql(u8, decl.name, en.name)) continue :loop,
+            .@"union" => for (unions.items) |un| if (std.mem.eql(u8, decl.name, un.name)) continue :loop,
+        }
+
+        try opaques.append(arena, .{
+            .kind = decl.kind,
+            .name = try arena.dupe(u8, decl.name),
+        });
+    }
+
     return .{
         .functions = try functions.toOwnedSlice(arena),
         .structs = try structs.toOwnedSlice(arena),
         .enums = try enums.toOwnedSlice(arena),
         .unions = try unions.toOwnedSlice(arena),
+        .opaques = try opaques.toOwnedSlice(arena),
     };
 }
 
